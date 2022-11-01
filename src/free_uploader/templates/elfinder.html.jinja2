@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<meta name="robots" content="none">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+	<title>{{ title|e }}</title>
+
+	<!-- Require JS (REQUIRED) -->
+	<!-- Rename "main.default.js" to "main.js" and edit it if you need configure elFInder options or any things -->
+	<script data-main="./main.default.js"
+		src="//cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+	<script>
+		define('elFinderConfig', {
+			// elFinder options (REQUIRED)
+			// Documentation for client options:
+			// https://github.com/Studio-42/elFinder/wiki/Client-configuration-options
+			defaultOpts: {
+				url: 'php/connector.minimal.php', // or connector.maximal.php : connector URL (REQUIRED)
+				defaultView: 'list',
+				height: '100%',
+				commands: [],
+				commandsOptions: {
+					getfile: {
+						onlyURL: true,
+						multiple: false,
+						folders: false
+					}
+				},
+				getFileCallback: function (file, elFinderInstance) {
+					var link = document.createElement('a');
+					link.href = file;
+					link.download = "";
+					link.click();
+				}
+			},
+			managers: {
+				// 'DOM Element ID': { /* elFinder options of this DOM Element */ }
+				'elfinder': {}
+			}
+		});
+	</script>
+</head>
+
+<body>
+
+	<!-- Element where elFinder will be created (REQUIRED) -->
+	<div id="elfinder"></div>
+
+</body>
+
+</html>
