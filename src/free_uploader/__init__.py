@@ -1,11 +1,13 @@
 from argparse import ArgumentParser, FileType, Namespace
 from base64 import b64encode
+from enum import Enum
 from hashlib import sha1
 from http import HTTPStatus
 from io import SEEK_END
 import logging
 from math import ceil
 from os import EX_OK
+from unittest.mock import DEFAULT
 from urllib.request import urlopen
 from urllib.parse import urlencode
 from pathlib import Path
@@ -22,8 +24,16 @@ DEFAULT_MAX_TRY = 5
 DEFAULT_FILES_PATH = "files"
 DEFAULT_ELFINDER_PATH = "."
 DEFAULT_HTML_TITLE = "Files"
+DEFAULT_HTML_FAVICON = "&#128193;"
+
+
+class ServerMode(Enum):
+    DEFAULT = "default"
+    UPLOAD = "upload"
+
 
 logger = logging.getLogger(__name__)
+server_modes_php_versions = {ServerMode.DEFAULT: "56", ServerMode.UPLOAD: ""}
 
 
 def http_upload_chunk(url: str, data_post: str, max_try: int, try_count: int = 0) -> None:
@@ -39,63 +49,62 @@ def http_upload_chunk(url: str, data_post: str, max_try: int, try_count: int = 0
         http_upload_chunk(url, data_post, max_try, try_count + 1)
 
 
-def http_call_function(url: str, function: str) -> None:
-    logger.debug(f"call_function(url={url}, function={function})")
-    data_post = urlencode({"function": function}).encode("ascii")
-    with urlopen(url, data_post) as response:
-        if response.status != HTTPStatus.OK:
-            raise Exception(response.read())
-
-
 def http_upload(args: Namespace) -> None:
     logger.debug("upload_file(args)")
     # arguments
+    ftp_host = str(args.ftp_host)
+    ftp_user = str(args.ftp_user)
+    ftp_passwd = str(args.ftp_passwd)
     remote_file_path = Path(args.file_to_upload.name if args.remote_file_path is None else args.remote_file_path)
     http_url = str(args.http_url)
     file_to_upload: FileType = args.file_to_upload
     chunk_size = int(args.chunk_size)
     max_try = int(args.max_try)
     # body
-    http_call_function(http_url, "set_upload_mode")
-    with file_to_upload as upload_file:
-        upload_file.seek(0, SEEK_END)
-        file_size = upload_file.tell()
-        upload_file.seek(0)
-        start_time = datetime.utcnow()
-        while True:
-            offset = upload_file.tell()
-            data_bin = upload_file.read(chunk_size)
-            if not data_bin:
-                break
-            data_size = len(data_bin)
-            data_sha1 = sha1(data_bin).hexdigest()
-            data_b64 = b64encode(data_bin)
-            data_post = urlencode(
-                {
-                    "function": "upload",
-                    "filepath": remote_file_path,
-                    "checksum": data_sha1,
-                    "size": data_size,
-                    "offset": offset,
-                    "data": data_b64,
-                }
-            ).encode("ascii")
-            elapsed_time = datetime.utcnow() - start_time
-            logger.info(
-                'uploading from "{}" to "{}", bytes: {}/{}, chunks: {}/{}, remaining time: {}'.format(
-                    file_to_upload.name,
-                    remote_file_path,
-                    str(offset + data_size).rjust(len(str(file_size))),
-                    file_size,
-                    str(ceil((offset + data_size) / chunk_size)).rjust(len(str(ceil(file_size / chunk_size)))),
-                    ceil(file_size / chunk_size),
-                    ((elapsed_time * file_size) / offset) - elapsed_time if offset else 0,
+    with FTP(ftp_host, ftp_user, ftp_passwd) as ftp:
+        set_server_mode(ServerMode.UPLOAD, ftp)
+    try:
+        with file_to_upload as upload_file:
+            upload_file.seek(0, SEEK_END)
+            file_size = upload_file.tell()
+            upload_file.seek(0)
+            start_time = datetime.utcnow()
+            while True:
+                offset = upload_file.tell()
+                data_bin = upload_file.read(chunk_size)
+                if not data_bin:
+                    break
+                data_size = len(data_bin)
+                data_sha1 = sha1(data_bin).hexdigest()
+                data_b64 = b64encode(data_bin)
+                data_post = urlencode(
+                    {
+                        "function": "upload",
+                        "filepath": remote_file_path,
+                        "checksum": data_sha1,
+                        "size": data_size,
+                        "offset": offset,
+                        "data": data_b64,
+                    }
+                ).encode("ascii")
+                elapsed_time = datetime.utcnow() - start_time
+                logger.info(
+                    'uploading from "{}" to "{}", bytes: {}/{}, chunks: {}/{}, remaining time: {}'.format(
+                        file_to_upload.name,
+                        remote_file_path,
+                        str(offset + data_size).rjust(len(str(file_size))),
+                        file_size,
+                        str(ceil((offset + data_size) / chunk_size)).rjust(len(str(ceil(file_size / chunk_size)))),
+                        ceil(file_size / chunk_size),
+                        ((elapsed_time * file_size) / offset) - elapsed_time if offset else 0,
+                    )
                 )
-            )
-            http_upload_chunk(http_url, data_post, max_try)
-            if data_size < chunk_size:
-                break
-    http_call_function(http_url, "set_default_mode")
+                http_upload_chunk(http_url, data_post, max_try)
+                if data_size < chunk_size:
+                    break
+    finally:
+        with FTP(ftp_host, ftp_user, ftp_passwd) as ftp:
+            set_server_mode(ServerMode.DEFAULT, ftp)
 
 
 def ftp_remove(args: Namespace) -> None:
@@ -139,7 +148,7 @@ def ftp_rename(args: Namespace) -> None:
         ftp.rename(str(from_remote_path), str(to_remote_path))
 
 
-def ftp_install(args: Namespace):
+def ftp_install(args: Namespace) -> None:
     logger.debug("ftp_install(args)")
     # arguments
     http_url = str(args.http_url)
@@ -202,12 +211,27 @@ def ftp_install(args: Namespace):
             connector_path = elfinder_path.joinpath("php", "connector.minimal.php")
             logger.info(f"FTP stor {connector_path}")
             ftp.storbinary(f"STOR {connector_path}", connector_io)
-        with BytesIO() as htaccess_io:
-            htaccess_io.write("php56 1\n".encode())
-            htaccess_io.seek(0)
-            htaccess_path = ".htaccess"
-            logger.info(f"FTP stor {htaccess_path}")
-            ftp.storbinary(f"STOR {htaccess_path}", htaccess_io)
+        set_server_mode(ServerMode.DEFAULT, ftp)
+
+
+def set_server_mode(mode: ServerMode, ftp: FTP) -> None:
+    logger.debug(f"set_server_mode(mode={mode}, ftp=...)")
+    with BytesIO(f"php{server_modes_php_versions[mode]} 1\n".encode()) as htaccess_io:
+        htaccess_path = ".htaccess"
+        logger.info(f"FTP stor {htaccess_path}")
+        ftp.storbinary(f"STOR {htaccess_path}", htaccess_io)
+
+
+def ftp_mode(args: Namespace) -> None:
+    logger.debug("ftp_mode(args)")
+    # arguments
+    ftp_host = str(args.ftp_host)
+    ftp_user = str(args.ftp_user)
+    ftp_passwd = str(args.ftp_passwd)
+    mode = ServerMode(args.mode)
+    # body
+    with FTP(ftp_host, ftp_user, ftp_passwd) as ftp:
+        set_server_mode(mode, ftp)
 
 
 def main(http_url: str, ftp_host: str, ftp_user: str, ftp_passwd: str) -> int:
@@ -245,9 +269,15 @@ def main(http_url: str, ftp_host: str, ftp_user: str, ftp_passwd: str) -> int:
     # install
     parser_install = subparsers.add_parser("install")
     parser_install.add_argument("--title", default=DEFAULT_HTML_TITLE)
+    parser_install.add_argument("--favicon", default=DEFAULT_HTML_FAVICON)
     parser_install.add_argument("--files-path", type=Path, default=DEFAULT_FILES_PATH)
     parser_install.add_argument("--elfinder-path", type=Path, default=DEFAULT_ELFINDER_PATH)
     parser_install.set_defaults(func=ftp_install)
+
+    # mode
+    parser_mode = subparsers.add_parser("mode")
+    parser_mode.add_argument("mode", type=ServerMode, choices=ServerMode)
+    parser_mode.set_defaults(func=ftp_mode)
 
     # parse args
     args = parser.parse_args()

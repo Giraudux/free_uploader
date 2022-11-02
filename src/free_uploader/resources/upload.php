@@ -8,14 +8,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             case "upload":
                 upload();
                 break;
-            
-            case "set_upload_mode":
-                set_upload_mode();
-                break;
-
-            case "set_default_mode":
-                set_default_mode();
-                break;
 
             default:
                 throw new Exception("unknown function ".$_POST["function"]);
@@ -24,18 +16,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } catch(Exception $e) {
         echo $e->getMessage();
         http_response_code(203);
-    }
-}
-
-function set_upload_mode() {
-    if (file_put_contents(".htaccess", "php 1\n") === false) {
-        throw new Exception("file_put_contents");
-    }
-}
-
-function set_default_mode() {
-    if (file_put_contents(".htaccess", "php56 1\n") === false) {
-        throw new Exception("file_put_contents");
     }
 }
 
