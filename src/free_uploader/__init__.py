@@ -77,14 +77,15 @@ def http_upload(args: Namespace) -> None:
                 data_size = len(data_bin)
                 data_sha1 = sha1(data_bin).hexdigest()
                 data_b64 = b64encode(data_bin)
+                remote_file_path_b64 = b64encode(str(remote_file_path).encode())
                 data_post = urlencode(
                     {
                         "function": "upload",
-                        "filepath": remote_file_path,
-                        "checksum": data_sha1,
+                        "filepath_b64": remote_file_path_b64,
+                        "checksum_sha1": data_sha1,
                         "size": data_size,
                         "offset": offset,
-                        "data": data_b64,
+                        "data_b64": data_b64,
                     }
                 ).encode("ascii")
                 elapsed_time = datetime.utcnow() - start_time
@@ -158,6 +159,7 @@ def ftp_install(args: Namespace) -> None:
     elfinder_path = Path(args.elfinder_path)
     files_path = Path(args.files_path)
     title = str(args.title)
+    favicon = str(args.favicon)
     # body
     with FTP(ftp_host, ftp_user, ftp_passwd) as ftp:
         # install elfinder from zip
@@ -192,7 +194,7 @@ def ftp_install(args: Namespace) -> None:
         jinja2_env = Environment(loader=PackageLoader("free_uploader"))
         with BytesIO() as elfinder_io:
             elfinder_tpl = jinja2_env.get_template("elfinder.html.jinja2")
-            elfinder_str = elfinder_tpl.render(title=title)
+            elfinder_str = elfinder_tpl.render(title=title, favicon=favicon)
             elfinder_io.write(elfinder_str.encode())
             elfinder_io.seek(0)
             index_path = elfinder_path.joinpath("index.html")

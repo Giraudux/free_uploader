@@ -20,7 +20,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 }
 
 function upload() {
-    $parent = dirname($_POST["filepath"]);
+    $filepath = base64_decode($_POST["filepath_b64"]);
+
+    $parent = dirname($filepath);
     if (is_dir($parent) == false) {
         if(mkdir($parent, 0777, true) == false) {
             throw new Exception("mkdir");
@@ -29,7 +31,7 @@ function upload() {
 
     $mode = (int)$_POST["offset"] != 0 ? "ab" : "wb";
 
-    $file_fd = fopen($_POST["filepath"], $mode);
+    $file_fd = fopen($filepath, $mode);
     if($file_fd == false) {
         throw new Exception("fopen");
     }
@@ -41,8 +43,8 @@ function upload() {
         }
     }
 
-    $data = base64_decode($_POST["data"]);
-    if (sha1($data) != $_POST["checksum"]) {
+    $data = base64_decode($_POST["data_b64"]);
+    if (sha1($data) != $_POST["checksum_sha1"]) {
         throw new Exception("sha1");
     }
 
