@@ -7,7 +7,6 @@ from io import SEEK_END
 import logging
 from math import ceil
 from os import EX_OK
-from unittest.mock import DEFAULT
 from urllib.request import urlopen
 from urllib.parse import urlencode
 from pathlib import Path
