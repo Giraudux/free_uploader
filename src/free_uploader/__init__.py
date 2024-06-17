@@ -162,7 +162,7 @@ def ftp_install(args: Namespace) -> None:
     # body
     with FTP(ftp_host, ftp_user, ftp_passwd) as ftp:
         # install elfinder from zip
-        with as_file(files("free_uploader").joinpath("resources").joinpath("elFinder-2.1.61.zip")) as elfinder_file:
+        with as_file(files("free_uploader.resources").joinpath("elFinder-2.1.65.zip")) as elfinder_file:
             with ZipFile(elfinder_file) as elfinder_zip:
                 for zip_info in elfinder_zip.infolist():
                     zip_path = elfinder_path.joinpath(*Path(zip_info.filename).parts[1:])
@@ -184,7 +184,7 @@ def ftp_install(args: Namespace) -> None:
             pass
         # upload upload.php
         # TODO : create parents
-        with as_file(files("free_uploader").joinpath("resources").joinpath("upload.php")) as upload_php_path:
+        with as_file(files("free_uploader.resources").joinpath("upload.php")) as upload_php_path:
             with open(upload_php_path, "rb") as upload_php_file:
                 url_path = Path(urlparse(http_url).path)
                 upload_path = Path(url_path).relative_to(url_path.root)

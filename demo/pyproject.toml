@@ -1,3 +1,13 @@
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "foo"
+version = "0.0.1"
+dependencies = [
+    "free_uploader"
+]
+
+[project.scripts]
+foo = "foo:main"
